@@ -1,105 +1,106 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Container, Button } from './ui-components';
-import { Menu, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { UserCircle, Crown, ChevronDown } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Badge } from '@/components/ui/badge';
 
 const Header: React.FC = () => {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
-
-  const navItems = [
-    { label: 'Home', href: '/' },
-    { label: 'Create', href: '/create' },
-    { label: 'Features', href: '/#features' },
-  ];
-
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      setIsAuthenticated(!!data.session);
+      
+      if (data.session) {
+        // Check subscription status
+        const { data: subscriptionData, error } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', data.session.user.id)
+          .eq('is_active', true)
+          .gt('expires_at', new Date().toISOString())
+          .limit(1);
+          
+        setIsSubscribed(subscriptionData && subscriptionData.length > 0);
+      }
     };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    
+    checkAuth();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsAuthenticated(!!session);
+      if (!session) {
+        setIsSubscribed(false);
+      }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-  }, [location.pathname]);
-
   return (
-    <header
-      className={`fixed top-0 left-0 right-0 z-50 py-4 transition-all duration-300 ${
-        isScrolled ? 'bg-background/80 backdrop-blur-lg shadow-soft' : 'bg-transparent'
-      }`}
-    >
-      <Container className="flex items-center justify-between">
-        <Link to="/" className="text-2xl font-bold tracking-tight transition-transform hover:scale-105 duration-300">
-          Documentopia
-        </Link>
-
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-8">
-          <ul className="flex space-x-8">
-            {navItems.map((item) => (
-              <li key={item.label}>
-                <Link
-                  to={item.href}
-                  className={`text-sm font-medium transition-all hover:text-primary ${
-                    location.pathname === item.href ? 'text-primary' : 'text-foreground'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <Button asChild>
-            <Link to="/create">Get Started</Link>
-          </Button>
-        </nav>
-
-        {/* Mobile Menu Button */}
-        <button 
-          className="md:hidden flex items-center justify-center"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
-        >
-          {isMobileMenuOpen ? (
-            <X className="h-6 w-6" />
-          ) : (
-            <Menu className="h-6 w-6" />
-          )}
-        </button>
-      </Container>
-
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 right-0 bg-background/95 backdrop-blur-lg shadow-medium animate-slide-down">
-          <Container className="py-5">
-            <ul className="flex flex-col space-y-3">
-              {navItems.map((item) => (
-                <li key={item.label}>
-                  <Link
-                    to={item.href}
-                    className={`block py-2 text-lg font-medium hover:text-primary ${
-                      location.pathname === item.href ? 'text-primary' : 'text-foreground'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-              <li className="pt-3">
-                <Button className="w-full" asChild>
-                  <Link to="/create">Get Started</Link>
-                </Button>
-              </li>
-            </ul>
-          </Container>
+    <header className="fixed w-full bg-background/80 backdrop-blur-md z-10 border-b">
+      <div className="container flex h-16 items-center justify-between py-4">
+        <div className="flex gap-6 md:gap-10">
+          <Link to="/" className="flex items-center space-x-2">
+            <span className="font-bold text-xl">DocGen</span>
+            {isSubscribed && (
+              <Badge variant="default" className="bg-purple-500 hover:bg-purple-600 ml-2 flex items-center gap-1">
+                <Crown className="h-3 w-3" />
+                <span>Premium</span>
+              </Badge>
+            )}
+          </Link>
+          <nav className="flex gap-6">
+            <Link
+              to="/"
+              className={`text-sm font-medium transition-colors hover:text-primary ${
+                location.pathname === '/' ? 'text-foreground' : 'text-foreground/60'
+              }`}
+            >
+              Home
+            </Link>
+            <Link
+              to="/create"
+              className={`text-sm font-medium transition-colors hover:text-primary ${
+                location.pathname === '/create' ? 'text-foreground' : 'text-foreground/60'
+              }`}
+            >
+              Create
+            </Link>
+          </nav>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          {isAuthenticated ? (
+            <div className="flex items-center">
+              {isSubscribed && (
+                <Badge variant="outline" className="border-purple-500 text-purple-500 mr-3">
+                  <Crown className="h-3 w-3 mr-1 text-purple-500" />
+                  Premium
+                </Badge>
+              )}
+              <Link to="/create">
+                <Button size="sm" variant="ghost">
+                  <UserCircle className="mr-2 h-4 w-4" />
+                  Dashboard
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <Link to="/auth">
+              <Button size="sm">
+                Sign In
+              </Button>
+            </Link>
+          )}
+        </div>
+      </div>
     </header>
   );
 };
